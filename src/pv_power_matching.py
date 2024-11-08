@@ -18,7 +18,7 @@ def load_characteristic():
     return time_day, load_power
 
 
-def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> np.ndarray:
+def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> tuple:
     """Calculate the sun position as normal vector that points from the
     location to the suns position in the sky. Supports iterables.
 
@@ -28,16 +28,19 @@ def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> n
         normal for
 
     Returns:
-        np.ndarray: 3D sun normal pointing to sun position from normal
+        tuple: 3D np.ndarray sun normal pointing to sun position from
+        normal and bool array when sun is above horizon. 
     """
     sun_data = get_sun(time)
     location_frame = AltAz(obstime=time, location=location)
     sun_altitude_azimuth = sun_data.transform_to(location_frame)
-    sun_altitude = np.deg2rad(90 - np.array(sun_altitude_azimuth.alt))
+    sun_altitude = np.deg2rad(np.array(sun_altitude_azimuth.alt))
+    sun_polar_angle = 90 - sun_altitude  # polar angle is measured from vertical
     sun_azimuth = np.deg2rad(np.array(sun_altitude_azimuth.az))
-    sun_normal = np.array([np.sin(sun_altitude) * np.cos(sun_azimuth),
-                          np.sin(sun_altitude) * np.sin(sun_azimuth), np.cos(sun_altitude)])
-    return sun_normal
+    sun_normal = np.array([np.sin(sun_polar_angle) * np.cos(sun_azimuth),
+                          np.sin(sun_polar_angle) * np.sin(sun_azimuth), np.cos(sun_polar_angle)])
+    sun_above_horizon = sun_altitude > 0
+    return sun_normal, sun_above_horizon
 
 
 def panel_normal_from_tilt_and_az(panel_azimuth: float, panel_tilt: float) -> np.ndarray:
@@ -97,13 +100,16 @@ def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orienta
     """
     panel_azimuth = panel_orientation[0, :]
     panel_tilt = panel_orientation[1, :]
-    sun_normals = sun_position_for_time_and_location(times, location)
+    sun_normals, sun_over_horizon_mask = sun_position_for_time_and_location(times, location)
     panel_normals = panel_normal_from_tilt_and_az(panel_tilt, panel_azimuth)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
     # TODO: Here we could add another factor for atmospheric absorption.
     atmospheric_absorption = 1
     panel_power_fraction = cos_theta * atmospheric_absorption
+    sun_behind_panel_mask = cos_theta < 0
     pv_panel_power = PANEL_MAX_POWER * panel_power_fraction
+    pv_panel_power[:, ~sun_over_horizon_mask] = 0
+    pv_panel_power[sun_behind_panel_mask] = 0
     return pv_panel_power
 
 
@@ -126,7 +132,7 @@ def pv_system_power_production_characteristic(
     """
     pv_panel_power = calculate_pv_panel_power(
         times=times, location=system_location, panel_orientation=panel_orientation)
-    pv_system_power = np.sum(pv_panel_power)
+    pv_system_power = np.sum(pv_panel_power, axis=1)
     return pv_system_power
 
 
