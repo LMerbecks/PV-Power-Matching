@@ -8,7 +8,11 @@ import astropy.units as u
 
 import matplotlib.pyplot as plt
 
+from GA_module_v6 import ga_min
+
 ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
+FILENAME = pathlib.Path(__file__).stem
+OBJECTIVE_FUNCTION = 'objective_function'
 
 
 def load_characteristic():
@@ -145,8 +149,9 @@ def pv_system_power_production_characteristic(
     the system. 
 
     Args:
-        panel_orientation (np.ndarray): Panel orientations. Columns:
-        panels, rows: {0: 'azimuth', 1: 'tilt'}. Tilt measured against horizontal.
+        panel_orientation (np.ndarray): Panel orientations. Columns are
+        panels, rows are {0: 'azimuth', 1: 'tilt'}. Tilt measured
+        against horizontal. All angles in rad
         system_location (EarthLocation): System location (on earth)
         times (Time): Times to calculate characteristic for
 
@@ -193,7 +198,8 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     """Maps GA populations to panel orientations. The real population
     contains the azimuth and tilt angles of the panels, while the
     integer population specifies the amount of panels that shall be
-    used. 
+    used. The mapping works in a way that expects the real population to
+    be a horizontal stack of all azimuths and all tilts.
 
     Args:
         real_population (np.ndarray): Real number population with angles
@@ -209,7 +215,7 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     number_of_panels_to_use = integer_population[0]
     new_shape = (2, int(real_population.shape[0]/2))
     panel_orientations = np.reshape(
-        real_population, shape=new_shape, order='F')
+        real_population, shape=new_shape, order='C')
     panel_orientations = panel_orientations[:, :(number_of_panels_to_use)]
     return panel_orientations
 
@@ -260,10 +266,38 @@ def plot_result(real_population, integer_population):
     plt.title("Power characteristics for problem")
     plt.legend()
     plt.show()
+    
+def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
+    print(Ibest)
+    
+    # Plot progress
+    plt.plot(PI_best_progress)
+    plt.xlabel('Generation')
+    plt.ylabel('Best score (% target)')
+    plt.show()
+    return
+    
+def main():
+    number_of_generations = 200
+    number_of_populations = 400 
+    number_of_real_variables = 20*2
+    number_of_integer_variables = 1
+    number_of_permutation_variables = 0
+    azimuth_limit = np.array([[0], [np.deg2rad(360)]])
+    tilt_limit = np.array([[0], [np.deg2rad(90)]])
+    azimuth_limits = np.repeat(azimuth_limit, repeats=number_of_real_variables/2, axis=1)
+    tilt_limits = np.repeat(tilt_limit, repeats=number_of_real_variables/2, axis=1)
+    real_variable_limits = np.hstack([azimuth_limits, tilt_limits]) # orientation of panels
+    integer_variable_limits = np.array([[0],[number_of_real_variables/2]]).astype(int) # number of panels
+    tournament_probability = 0.8  
+    crossover_probability = 0.8
+    mutation_probability = 0.075
+    
+    size_parameters = np.array([number_of_generations, number_of_populations, number_of_real_variables, number_of_integer_variables,number_of_permutation_variables]).astype(int)
+    probability_parameters = np.array([tournament_probability, crossover_probability, mutation_probability])
+        
+    PI_best,Rbest,Ibest,Pbest,PI_best_progress = ga_min(FILENAME,OBJECTIVE_FUNCTION,size_parameters,integer_variable_limits,real_variable_limits,probability_parameters)
+    ga_results(Rbest, Ibest, Pbest,PI_best, PI_best_progress)
 
 if __name__ == '__main__':
-    real_test_population = np.deg2rad(np.array([0,0, 0, 0]))
-    integer_test_population = np.array([2])
-    print(objective_function(real_population=real_test_population, integer_population=integer_test_population,
-                       permutation_population=0))
-    plot_result(real_population=real_test_population, integer_population=integer_test_population)
+    main()
