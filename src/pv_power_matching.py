@@ -6,6 +6,8 @@ from astropy.coordinates import EarthLocation, AltAz, get_sun
 from astropy.time import Time
 import astropy.units as u
 
+import matplotlib.pyplot as plt
+
 ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
 
 
@@ -17,6 +19,13 @@ def load_characteristic():
     load_power = power_demand['P_max'].values
     return time_day, load_power
 
+def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
+    fig, (ax_top, ax_mid, ax_bot) = plt.subplots(nrows=3, ncols=1)
+    ax_top.plot(sun_altitude)
+    ax_mid.plot(sun_polar_angle)
+    ax_bot.plot(sun_azimuth)
+    plt.show()
+    return 
 
 def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> tuple:
     """Calculate the sun position as normal vector that points from the
@@ -35,7 +44,7 @@ def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> t
     location_frame = AltAz(obstime=time, location=location)
     sun_altitude_azimuth = sun_data.transform_to(location_frame)
     sun_altitude = np.deg2rad(np.array(sun_altitude_azimuth.alt))
-    sun_polar_angle = 90 - sun_altitude  # polar angle is measured from vertical
+    sun_polar_angle = np.deg2rad(90) - sun_altitude  # polar angle is measured from vertical
     sun_azimuth = np.deg2rad(np.array(sun_altitude_azimuth.az))
     sun_normal = np.array([np.sin(sun_polar_angle) * np.cos(sun_azimuth),
                           np.sin(sun_polar_angle) * np.sin(sun_azimuth), np.cos(sun_polar_angle)])
@@ -79,6 +88,20 @@ def cosine_of_incidence_angle(panel_normal: np.ndarray, sun_normal: np.ndarray) 
     cos_theta = (np.dot(panel_normal.T, sun_normal))
     return cos_theta
 
+def plot_normals(sun_normals, panel_normals):
+    axis = plt.figure().add_subplot(projection='3d')
+    axis.quiver(0,0,0,sun_normals[0,::20], sun_normals[1,::20], sun_normals[2,::20])
+    axis.quiver(0,0,0,panel_normals[0,:], panel_normals[1,:], panel_normals[2,:], color='red')
+
+    axis.set_xlim([-1,1])
+    axis.set_xlabel('North 1')
+    axis.set_ylim([-1,1])
+    axis.set_ylabel('West 1')
+    axis.set_zlim([-.5,1])
+
+    axis.view_init(elev=30,azim=270,roll=0)
+    plt.show()
+    return 
 
 def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orientation: np.ndarray, PANEL_MAX_POWER: float = 250.0) -> np.ndarray:
     """Calculate the panel power to a specific time, at a certain
@@ -132,7 +155,7 @@ def pv_system_power_production_characteristic(
     """
     pv_panel_power = calculate_pv_panel_power(
         times=times, location=system_location, panel_orientation=panel_orientation)
-    pv_system_power = np.sum(pv_panel_power, axis=1)
+    pv_system_power = np.sum(pv_panel_power, axis=0)
     return pv_system_power
 
 
@@ -146,11 +169,25 @@ def mean_absolute_percentage_error(expected: float, predicted: float) -> float:
     Returns:
         float: MAPE of the data set
     """
-    percentage_errors = (predicted - expected)/expected
+    percentage_errors = (expected - predicted)/expected
     absolute_percentage_errors = np.abs(percentage_errors)
     mean_absolute_percentage_error = np.mean(absolute_percentage_errors)
     return mean_absolute_percentage_error
 
+def sum_of_squared_errors(expected: float, predicted: float)->float:
+    """Calculates the sum of squared errors for two data sets
+
+    Args:
+        expected (float): expected data
+        predicted (float): predicted data
+
+    Returns:
+        float: SSE
+    """
+    errors = expected-predicted
+    squared_errors = errors**2
+    sum_of_squared_errors = np.sum(squared_errors)
+    return sum_of_squared_errors
 
 def map_populations_to_orientation(real_population: np.ndarray, integer_population: np.ndarray) -> np.ndarray:
     """Maps GA populations to panel orientations. The real population
@@ -170,17 +207,17 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     """
 
     number_of_panels_to_use = integer_population[0]
-    new_shape = (2, int(real_population/2))
+    new_shape = (2, int(real_population.shape[0]/2))
     panel_orientations = np.reshape(
         real_population, shape=new_shape, order='F')
-    panel_orientations = panel_orientations[:, :(number_of_panels_to_use-1)]
+    panel_orientations = panel_orientations[:, :(number_of_panels_to_use)]
     return panel_orientations
 
 
 def objective_function(real_population, integer_population, permutation_population):
     # Essen coordinates
-    SYSTEM_LON = 51.458069
-    SYSTEM_LAT = 7.014761
+    SYSTEM_LON = 7.014761
+    SYSTEM_LAT = 51.458069
     SYSTEM_ELV = 116.0
 
     panel_orientations = map_populations_to_orientation(
@@ -195,9 +232,38 @@ def objective_function(real_population, integer_population, permutation_populati
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations, system_location=system_location, times=supply_times)
 
-    return mean_absolute_percentage_error(power_demand_characteristic, power_supply_characteristic)
+    return sum_of_squared_errors(power_demand_characteristic, power_supply_characteristic)
 
+def plot_result(real_population, integer_population):
+    # Essen coordinates
+    SYSTEM_LAT = 51.458069
+    SYSTEM_LON = 7.014761
+    SYSTEM_ELV = 116.0
+    
+    panel_orientations = map_populations_to_orientation(
+        real_population, integer_population)
+
+    system_location = EarthLocation(
+        lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
+    demand_times, power_demand_characteristic = load_characteristic()
+    time_start = Time('2024-9-22 00:00:00')
+    SAMPLES = demand_times.shape[0]
+    supply_times = time_start + u.hour * np.linspace(0., 24., SAMPLES)
+    power_supply_characteristic = pv_system_power_production_characteristic(
+        panel_orientation=panel_orientations, system_location=system_location, times=supply_times)
+    
+    plt.plot(demand_times, power_demand_characteristic, label='Demand curve')
+    plt.plot(demand_times, power_supply_characteristic, label='Production curve')
+    plt.grid(visible=True, which='both')
+    plt.xlabel("Time [day]")
+    plt.ylabel("Power [W]")
+    plt.title("Power characteristics for problem")
+    plt.legend()
+    plt.show()
 
 if __name__ == '__main__':
-    objective_function(real_population=0, integer_population=0,
-                       permutation_population=0)
+    real_test_population = np.deg2rad(np.array([0,0, 0, 0]))
+    integer_test_population = np.array([2])
+    print(objective_function(real_population=real_test_population, integer_population=integer_test_population,
+                       permutation_population=0))
+    plot_result(real_population=real_test_population, integer_population=integer_test_population)
