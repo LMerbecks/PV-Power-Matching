@@ -47,6 +47,7 @@ def tournament_selection(Rpop,Ipop,Ppop,nrvar,nivar,npvar,PI,ptou):
     Inew = Ipop.copy()
     Pnew = Ppop.copy()
 
+    # WTF why four?
     Ipar = np.zeros((4,npop), dtype = int)
 #    parent_idx = np.random.randint(0, population_size, (2, population_size))
     for i in range(4):
@@ -56,7 +57,7 @@ def tournament_selection(Rpop,Ipop,Ppop,nrvar,nivar,npvar,PI,ptou):
 #    new_population = population[np.argmin(fitness[parent_idx], axis=0)]
 #    Ipar = gen_parents(npop)
 
-
+    # TODO: the index is too large and the algorithm crashes here...
     if(nrvar > 0): Rnew = Rpop[np.argmin(PI[Ipar], axis=0)]
     if(nivar > 0): Inew = Ipop[np.argmin(PI[Ipar], axis=0)]
     if(nrvar > 0): Pnew = Ppop[np.argmin(PI[Ipar], axis=0)]
