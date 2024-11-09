@@ -278,8 +278,8 @@ def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
     return
     
 def main():
-    number_of_generations = 200
-    number_of_populations = 400 
+    number_of_generations = 2
+    number_of_populations = 2
     number_of_real_variables = 20*2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
