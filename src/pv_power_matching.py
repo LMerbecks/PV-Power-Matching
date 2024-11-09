@@ -14,7 +14,6 @@ ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
 FILENAME = pathlib.Path(__file__).stem
 OBJECTIVE_FUNCTION = 'objective_function'
 
-
 def load_characteristic():
     JSON_DATA_FILE_NAME = ABS_FILE_PATH / '..' / 'dat' / \
         'worst_case_power_demand_characteristic.json'
@@ -22,14 +21,6 @@ def load_characteristic():
     time_day = power_demand['Time_day'].values
     load_power = power_demand['P_max'].values
     return time_day, load_power
-
-def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
-    fig, (ax_top, ax_mid, ax_bot) = plt.subplots(nrows=3, ncols=1)
-    ax_top.plot(sun_altitude)
-    ax_mid.plot(sun_polar_angle)
-    ax_bot.plot(sun_azimuth)
-    plt.show()
-    return 
 
 def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> tuple:
     """Calculate the sun position as normal vector that points from the
@@ -54,6 +45,31 @@ def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> t
                           np.sin(sun_polar_angle) * np.sin(sun_azimuth), np.cos(sun_polar_angle)])
     sun_above_horizon = sun_altitude > 0
     return sun_normal, sun_above_horizon
+
+# Essen coordinates
+SYSTEM_LON = 7.014761
+SYSTEM_LAT = 51.458069
+SYSTEM_ELV = 116.0
+# setup:
+system_location = EarthLocation(
+    lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
+# TODO: this is also shitty as the load characteristic is loaded
+# every time the objective function is called. 
+demand_times, power_demand_characteristic = load_characteristic()
+time_start = Time('2024-9-22 00:00:00')
+SAMPLES = demand_times.shape[0]
+supply_times = time_start + u.hour * np.linspace(0., 24., SAMPLES)
+sun_normals, sun_over_horizon_mask = sun_position_for_time_and_location(supply_times, system_location)
+
+
+def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
+    fig, (ax_top, ax_mid, ax_bot) = plt.subplots(nrows=3, ncols=1)
+    ax_top.plot(sun_altitude)
+    ax_mid.plot(sun_polar_angle)
+    ax_bot.plot(sun_azimuth)
+    plt.show()
+    return 
+
 
 
 def panel_normal_from_tilt_and_az(panel_azimuth: float, panel_tilt: float) -> np.ndarray:
@@ -107,7 +123,7 @@ def plot_normals(sun_normals, panel_normals):
     plt.show()
     return 
 
-def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orientation: np.ndarray, PANEL_MAX_POWER: float = 250.0) -> np.ndarray:
+def calculate_pv_panel_power(panel_orientation: np.ndarray, PANEL_MAX_POWER: float = 250.0) -> np.ndarray:
     """Calculate the panel power to a specific time, at a certain
     position for a location on earth. Supports multiple times and
     multiple panels. For this provide times as a (1,N) array N being the
@@ -115,8 +131,6 @@ def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orienta
     number of panels. 
 
     Args:
-        times (Time): time to calculate power at
-        location (EarthLocation): position of the panel on earth
         panel_orientation (np.ndarray): panel orientation. Specify
         individual panels as columns where rows are: {0:'azimuth', 1:'tilt'}
         PANEL_MAX_POWER (float, optional): Power of panel under ideal
@@ -129,7 +143,6 @@ def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orienta
     panel_tilt = panel_orientation[1, :]
     # TODO: prevent this function from being called every time this is
     # suuuuuper slow.
-    sun_normals, sun_over_horizon_mask = sun_position_for_time_and_location(times, location)
     panel_normals = panel_normal_from_tilt_and_az(panel_tilt, panel_azimuth)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
     # TODO: Here we could add another factor for atmospheric absorption.
@@ -143,9 +156,7 @@ def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orienta
 
 
 def pv_system_power_production_characteristic(
-        panel_orientation: np.ndarray,
-        system_location: EarthLocation,
-        times: Time) -> np.ndarray:
+        panel_orientation: np.ndarray) -> np.ndarray:
     """Calculates the power production characteristic for a pv system
     over the specified times. panel_orientation.shape[1] panels make up
     the system. 
@@ -154,14 +165,11 @@ def pv_system_power_production_characteristic(
         panel_orientation (np.ndarray): Panel orientations. Columns are
         panels, rows are {0: 'azimuth', 1: 'tilt'}. Tilt measured
         against horizontal. All angles in rad
-        system_location (EarthLocation): System location (on earth)
-        times (Time): Times to calculate characteristic for
 
     Returns:
         np.ndarray: PV system power characteristic with length of times
     """
-    pv_panel_power = calculate_pv_panel_power(
-        times=times, location=system_location, panel_orientation=panel_orientation)
+    pv_panel_power = calculate_pv_panel_power(panel_orientation=panel_orientation)
     pv_system_power = np.sum(pv_panel_power, axis=0)
     return pv_system_power
 
@@ -223,47 +231,22 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
 
 
 def objective_function(real_population, integer_population, permutation_population):
-    # Essen coordinates
-    SYSTEM_LON = 7.014761
-    SYSTEM_LAT = 51.458069
-    SYSTEM_ELV = 116.0
-
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
-
-    system_location = EarthLocation(
-        lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
-    # TODO: this is also shitty as the load characteristic is loaded
-    # every time the objective function is called. 
-    demand_times, power_demand_characteristic = load_characteristic()
-    time_start = Time('2024-9-22 00:00:00')
-    SAMPLES = demand_times.shape[0]
-    supply_times = time_start + u.hour * np.linspace(0., 24., SAMPLES)
     power_supply_characteristic = pv_system_power_production_characteristic(
-        panel_orientation=panel_orientations, system_location=system_location, times=supply_times)
+        panel_orientation=panel_orientations)
 
     return sum_of_squared_errors(power_demand_characteristic, power_supply_characteristic)
 
 def plot_result(real_population, integer_population):
-    # Essen coordinates
-    SYSTEM_LAT = 51.458069
-    SYSTEM_LON = 7.014761
-    SYSTEM_ELV = 116.0
-    
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
-    system_location = EarthLocation(
-        lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
-    demand_times, power_demand_characteristic = load_characteristic()
-    time_start = Time('2024-9-22 00:00:00')
-    SAMPLES = demand_times.shape[0]
-    supply_times = time_start + u.hour * np.linspace(0., 24., SAMPLES)
     power_supply_characteristic = pv_system_power_production_characteristic(
-        panel_orientation=panel_orientations, system_location=system_location, times=supply_times)
+        panel_orientation=panel_orientations)
     
-    plt.plot(demand_times, power_demand_characteristic, label='Demand curve')
-    plt.plot(demand_times, power_supply_characteristic, label='Production curve')
+    plt.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
+    plt.plot(demand_times*24, power_supply_characteristic, label='Production curve')
     plt.grid(visible=True, which='both')
     plt.xlabel("Time [day]")
     plt.ylabel("Power [W]")
@@ -280,12 +263,17 @@ def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
     plt.xlabel('Generation')
     plt.ylabel('Best score (% target)')
     plt.show()
+    
+    plot_result(Rbest, Ibest)
+    panel_orientation = map_populations_to_orientation(real_population=Rbest, integer_population=Ibest)
+    panel_normals = panel_normal_from_tilt_and_az(panel_orientation[0,:], panel_orientation[1,:])
+    plot_normals(sun_normals, panel_normals)
     return
     
-def main():
-    number_of_generations = 1
-    number_of_populations = 100
-    number_of_real_variables = 20*2
+def main():    
+    number_of_generations = 500
+    number_of_populations = 1000
+    number_of_real_variables = 40*2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
     azimuth_limit = np.array([[0], [np.deg2rad(360)]])
