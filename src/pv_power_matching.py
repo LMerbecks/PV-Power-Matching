@@ -143,7 +143,7 @@ def calculate_pv_panel_power(panel_orientation: np.ndarray, PANEL_MAX_POWER: flo
     panel_tilt = panel_orientation[1, :]
     # TODO: prevent this function from being called every time this is
     # suuuuuper slow.
-    panel_normals = panel_normal_from_tilt_and_az(panel_tilt, panel_azimuth)
+    panel_normals = panel_normal_from_tilt_and_az(panel_azimuth, panel_tilt)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
     # TODO: Here we could add another factor for atmospheric absorption.
     atmospheric_absorption = 1
