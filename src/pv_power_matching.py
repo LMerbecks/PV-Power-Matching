@@ -127,6 +127,8 @@ def calculate_pv_panel_power(times: Time, location: EarthLocation, panel_orienta
     """
     panel_azimuth = panel_orientation[0, :]
     panel_tilt = panel_orientation[1, :]
+    # TODO: prevent this function from being called every time this is
+    # suuuuuper slow.
     sun_normals, sun_over_horizon_mask = sun_position_for_time_and_location(times, location)
     panel_normals = panel_normal_from_tilt_and_az(panel_tilt, panel_azimuth)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
@@ -231,6 +233,8 @@ def objective_function(real_population, integer_population, permutation_populati
 
     system_location = EarthLocation(
         lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
+    # TODO: this is also shitty as the load characteristic is loaded
+    # every time the objective function is called. 
     demand_times, power_demand_characteristic = load_characteristic()
     time_start = Time('2024-9-22 00:00:00')
     SAMPLES = demand_times.shape[0]
@@ -269,6 +273,7 @@ def plot_result(real_population, integer_population):
     
 def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
     print(Ibest)
+    print(Rbest)
     
     # Plot progress
     plt.plot(PI_best_progress)
@@ -278,8 +283,8 @@ def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
     return
     
 def main():
-    number_of_generations = 2
-    number_of_populations = 2
+    number_of_generations = 1
+    number_of_populations = 100
     number_of_real_variables = 20*2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
