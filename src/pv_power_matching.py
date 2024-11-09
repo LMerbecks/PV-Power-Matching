@@ -14,6 +14,7 @@ ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
 FILENAME = pathlib.Path(__file__).stem
 OBJECTIVE_FUNCTION = 'objective_function'
 
+
 def load_characteristic():
     JSON_DATA_FILE_NAME = ABS_FILE_PATH / '..' / 'dat' / \
         'worst_case_power_demand_characteristic.json'
@@ -21,6 +22,7 @@ def load_characteristic():
     time_day = power_demand['Time_day'].values
     load_power = power_demand['P_max'].values
     return time_day, load_power
+
 
 def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> tuple:
     """Calculate the sun position as normal vector that points from the
@@ -39,12 +41,14 @@ def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> t
     location_frame = AltAz(obstime=time, location=location)
     sun_altitude_azimuth = sun_data.transform_to(location_frame)
     sun_altitude = np.deg2rad(np.array(sun_altitude_azimuth.alt))
-    sun_polar_angle = np.deg2rad(90) - sun_altitude  # polar angle is measured from vertical
+    # polar angle is measured from vertical
+    sun_polar_angle = np.deg2rad(90) - sun_altitude
     sun_azimuth = np.deg2rad(np.array(sun_altitude_azimuth.az))
     sun_normal = np.array([np.sin(sun_polar_angle) * np.cos(sun_azimuth),
                           np.sin(sun_polar_angle) * np.sin(sun_azimuth), np.cos(sun_polar_angle)])
     sun_above_horizon = sun_altitude > 0
-    return sun_normal, sun_above_horizon
+    return sun_normal, sun_above_horizon, sun_altitude
+
 
 # Essen coordinates
 SYSTEM_LON = 7.014761
@@ -53,13 +57,57 @@ SYSTEM_ELV = 116.0
 # setup:
 system_location = EarthLocation(
     lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
-# TODO: this is also shitty as the load characteristic is loaded
-# every time the objective function is called. 
 demand_times, power_demand_characteristic = load_characteristic()
 time_start = Time('2024-9-22 00:00:00')
 SAMPLES = demand_times.shape[0]
 supply_times = time_start + u.hour * np.linspace(0., 24., SAMPLES)
-sun_normals, sun_over_horizon_mask = sun_position_for_time_and_location(supply_times, system_location)
+sun_normals, sun_over_horizon_mask, sun_altitude = sun_position_for_time_and_location(
+    supply_times, system_location)
+
+
+def calculate_distance_through_atmosphere(ray_angle: float) -> float:
+    """Uses the law of cosine to determine the distance a ray
+    hitting the earths surface with ray_angle (rad) has to travel to
+    reach the surface. 
+
+    Args:
+        ray_angle (float): Angle of incidence of the ray on earth
+        surface in rads
+
+    Returns:
+        float: travel distance in meters. 
+    """
+    earth_radius = 6371e3  # m
+    stratosphere_height = 20e3  # m
+
+    side_a = earth_radius
+    side_c = (earth_radius + stratosphere_height)
+    angle_gamma = ray_angle + np.pi/2
+
+    p_coefficient = -2*side_a*np.cos(angle_gamma)
+    q_coefficient = side_a**2 - side_c**2
+
+    distance = -p_coefficient/2 + \
+        np.sqrt((p_coefficient/2)**2 - (q_coefficient))
+    return distance
+
+
+def influence_atmospheric_transmittance(sun_altitude: float) -> float:
+    """Calculates the influence of atmospheric transmittance by assuming
+    the transmittance scales with distance traveled through the
+    atmosphere. 
+
+    Args:
+        sun_altitude (float): Sun altitude in rad
+
+    Returns:
+        float: influence fraction. 1 if no influence at all (vertical sunlight)
+    """
+    atmospheric_travel_distance = calculate_distance_through_atmosphere(
+        sun_altitude)
+    minimum_distance = calculate_distance_through_atmosphere(np.pi/2)
+    transmittance_fraction = minimum_distance/atmospheric_travel_distance
+    return transmittance_fraction
 
 
 def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
@@ -68,8 +116,7 @@ def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
     ax_mid.plot(sun_polar_angle)
     ax_bot.plot(sun_azimuth)
     plt.show()
-    return 
-
+    return
 
 
 def panel_normal_from_tilt_and_az(panel_azimuth: float, panel_tilt: float) -> np.ndarray:
@@ -77,8 +124,8 @@ def panel_normal_from_tilt_and_az(panel_azimuth: float, panel_tilt: float) -> np
     orientation angles. Normal is 3D. Supports iterable inputs.
 
     Args:
-        panel_tilt (float): Panel tilt measured against horizontal
         panel_azimuth (float): Panel azimuth measured from north
+        panel_tilt (float): Panel tilt measured against horizontal
 
     Returns:
         np.ndarray: Normal of panel
@@ -108,20 +155,24 @@ def cosine_of_incidence_angle(panel_normal: np.ndarray, sun_normal: np.ndarray) 
     cos_theta = (np.dot(panel_normal.T, sun_normal))
     return cos_theta
 
+
 def plot_normals(sun_normals, panel_normals):
     axis = plt.figure().add_subplot(projection='3d')
-    axis.quiver(0,0,0,sun_normals[0,::20], sun_normals[1,::20], sun_normals[2,::20])
-    axis.quiver(0,0,0,panel_normals[0,:], panel_normals[1,:], panel_normals[2,:], color='red')
+    axis.quiver(0, 0, 0, sun_normals[0, ::20],
+                sun_normals[1, ::20], sun_normals[2, ::20])
+    axis.quiver(
+        0, 0, 0, panel_normals[0, :], panel_normals[1, :], panel_normals[2, :], color='red')
 
-    axis.set_xlim([-1,1])
+    axis.set_xlim([-1, 1])
     axis.set_xlabel('North 1')
-    axis.set_ylim([-1,1])
+    axis.set_ylim([-1, 1])
     axis.set_ylabel('West 1')
-    axis.set_zlim([-.5,1])
+    axis.set_zlim([-.5, 1])
 
-    axis.view_init(elev=30,azim=270,roll=0)
+    axis.view_init(elev=30, azim=270, roll=0)
     plt.show()
-    return 
+    return
+
 
 def calculate_pv_panel_power(panel_orientation: np.ndarray, PANEL_MAX_POWER: float = 250.0) -> np.ndarray:
     """Calculate the panel power to a specific time, at a certain
@@ -141,12 +192,9 @@ def calculate_pv_panel_power(panel_orientation: np.ndarray, PANEL_MAX_POWER: flo
     """
     panel_azimuth = panel_orientation[0, :]
     panel_tilt = panel_orientation[1, :]
-    # TODO: prevent this function from being called every time this is
-    # suuuuuper slow.
-    panel_normals = panel_normal_from_tilt_and_az(panel_tilt, panel_azimuth)
+    panel_normals = panel_normal_from_tilt_and_az(panel_azimuth, panel_tilt)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
-    # TODO: Here we could add another factor for atmospheric absorption.
-    atmospheric_absorption = 1
+    atmospheric_absorption = influence_atmospheric_transmittance(sun_altitude)
     panel_power_fraction = cos_theta * atmospheric_absorption
     sun_behind_panel_mask = cos_theta < 0
     pv_panel_power = PANEL_MAX_POWER * panel_power_fraction
@@ -169,7 +217,8 @@ def pv_system_power_production_characteristic(
     Returns:
         np.ndarray: PV system power characteristic with length of times
     """
-    pv_panel_power = calculate_pv_panel_power(panel_orientation=panel_orientation)
+    pv_panel_power = calculate_pv_panel_power(
+        panel_orientation=panel_orientation)
     pv_system_power = np.sum(pv_panel_power, axis=0)
     return pv_system_power
 
@@ -189,7 +238,8 @@ def mean_absolute_percentage_error(expected: float, predicted: float) -> float:
     mean_absolute_percentage_error = np.mean(absolute_percentage_errors)
     return mean_absolute_percentage_error
 
-def sum_of_squared_errors(expected: float, predicted: float)->float:
+
+def sum_of_squared_errors(expected: float, predicted: float) -> float:
     """Calculates the sum of squared errors for two data sets
 
     Args:
@@ -203,6 +253,7 @@ def sum_of_squared_errors(expected: float, predicted: float)->float:
     squared_errors = errors**2
     sum_of_squared_errors = np.sum(squared_errors)
     return sum_of_squared_errors
+
 
 def map_populations_to_orientation(real_population: np.ndarray, integer_population: np.ndarray) -> np.ndarray:
     """Maps GA populations to panel orientations. The real population
@@ -223,7 +274,7 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     """
 
     number_of_panels_to_use = integer_population[0]
-    new_shape = (2, int(real_population.shape[0]/2))
+    new_shape = (2, int(np.max(real_population.shape)/2))
     panel_orientations = np.reshape(
         real_population, shape=new_shape, order='C')
     panel_orientations = panel_orientations[:, :(number_of_panels_to_use)]
@@ -264,59 +315,74 @@ def objective_function(real_population, integer_population, permutation_populati
     cost = calculate_electricity_cost(power_consumed, time_step_hours=time_step)
     return cost
 
+
 def plot_result(real_population, integer_population):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    
+
     plt.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
-    plt.plot(demand_times*24, power_supply_characteristic, label='Production curve')
+    plt.plot(demand_times*24, power_supply_characteristic,
+             label='Production curve')
     plt.grid(visible=True, which='both')
     plt.xlabel("Time [day]")
     plt.ylabel("Power [W]")
     plt.title("Power characteristics for problem")
     plt.legend()
     plt.show()
-    
-def ga_results(Rbest,Ibest,Pbest,PI_best,PI_best_progress):
+
+
+def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     print(Ibest)
     print(Rbest)
-    
+
     # Plot progress
     plt.plot(PI_best_progress)
     plt.xlabel('Generation')
     plt.ylabel('Best score (% target)')
     plt.show()
-    
+
     plot_result(Rbest, Ibest)
-    panel_orientation = map_populations_to_orientation(real_population=Rbest, integer_population=Ibest)
-    panel_normals = panel_normal_from_tilt_and_az(panel_orientation[0,:], panel_orientation[1,:])
+    panel_orientation = map_populations_to_orientation(
+        real_population=Rbest, integer_population=Ibest)
+    panel_normals = panel_normal_from_tilt_and_az(
+        panel_orientation[0, :], panel_orientation[1, :])
     plot_normals(sun_normals, panel_normals)
     return
-    
-def main():    
-    number_of_generations = 50
+
+
+def main():
+    ga_results(np.deg2rad(np.array([[180,90,270,45,45,45]])), np.array([4]),0,0,0)
+    number_of_generations = 100
     number_of_populations = 1000
     number_of_real_variables = 20*2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
     azimuth_limit = np.array([[0], [np.deg2rad(360)]])
     tilt_limit = np.array([[0], [np.deg2rad(90)]])
-    azimuth_limits = np.repeat(azimuth_limit, repeats=number_of_real_variables/2, axis=1)
-    tilt_limits = np.repeat(tilt_limit, repeats=number_of_real_variables/2, axis=1)
-    real_variable_limits = np.hstack([azimuth_limits, tilt_limits]) # orientation of panels
-    integer_variable_limits = np.array([[0],[number_of_real_variables/2]]).astype(int) # number of panels
-    tournament_probability = 0.8  
+    azimuth_limits = np.repeat(
+        azimuth_limit, repeats=number_of_real_variables/2, axis=1)
+    tilt_limits = np.repeat(
+        tilt_limit, repeats=number_of_real_variables/2, axis=1)
+    real_variable_limits = np.hstack(
+        [azimuth_limits, tilt_limits])  # orientation of panels
+    integer_variable_limits = np.array(
+        [[0], [number_of_real_variables/2]]).astype(int)  # number of panels
+    tournament_probability = 0.8
     crossover_probability = 0.8
     mutation_probability = 0.075
-    
-    size_parameters = np.array([number_of_generations, number_of_populations, number_of_real_variables, number_of_integer_variables,number_of_permutation_variables]).astype(int)
-    probability_parameters = np.array([tournament_probability, crossover_probability, mutation_probability])
-        
-    PI_best,Rbest,Ibest,Pbest,PI_best_progress = ga_min(FILENAME,OBJECTIVE_FUNCTION,size_parameters,integer_variable_limits,real_variable_limits,probability_parameters)
-    ga_results(Rbest, Ibest, Pbest,PI_best, PI_best_progress)
+
+    size_parameters = np.array([number_of_generations, number_of_populations, number_of_real_variables,
+                               number_of_integer_variables, number_of_permutation_variables]).astype(int)
+    probability_parameters = np.array(
+        [tournament_probability, crossover_probability, mutation_probability])
+
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
+        FILENAME, OBJECTIVE_FUNCTION, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters)
+    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+
 
 if __name__ == '__main__':
     main()
