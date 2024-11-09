@@ -57,8 +57,6 @@ SYSTEM_ELV = 116.0
 # setup:
 system_location = EarthLocation(
     lon=SYSTEM_LON, lat=SYSTEM_LAT, height=SYSTEM_ELV)
-# TODO: this is also shitty as the load characteristic is loaded
-# every time the objective function is called.
 demand_times, power_demand_characteristic = load_characteristic()
 time_start = Time('2024-9-22 00:00:00')
 SAMPLES = demand_times.shape[0]
@@ -194,11 +192,8 @@ def calculate_pv_panel_power(panel_orientation: np.ndarray, PANEL_MAX_POWER: flo
     """
     panel_azimuth = panel_orientation[0, :]
     panel_tilt = panel_orientation[1, :]
-    # TODO: prevent this function from being called every time this is
-    # suuuuuper slow.
     panel_normals = panel_normal_from_tilt_and_az(panel_azimuth, panel_tilt)
     cos_theta = cosine_of_incidence_angle(panel_normals, sun_normals)
-    # TODO: Here we could add another factor for atmospheric absorption.
     atmospheric_absorption = influence_atmospheric_transmittance(sun_altitude)
     panel_power_fraction = cos_theta * atmospheric_absorption
     sun_behind_panel_mask = cos_theta < 0
