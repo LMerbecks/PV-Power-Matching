@@ -280,14 +280,40 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     panel_orientations = panel_orientations[:, :(number_of_panels_to_use)]
     return panel_orientations
 
+def calculate_electricity_cost(power_consumed:np.ndarray, time_step_hours:float)->float:
+    """calculates the electricity cost of a day operating the power
+    system and home together. 
+
+    Args:
+        power_consumed (np.ndarray): power consumed over the day
+        (negative entries mean power has been sold to the grid)
+        time_step_hours (float): constant time step for the power array
+
+    Returns:
+        float: cost of electricity 
+    """
+    ELECTRICITY_COST = 16e-2 #cent per kWh
+    ELECTRICITY_RETAIL_PRICE = 8e-2 #cent per kWh
+    
+    energy_consumed = power_consumed * time_step_hours # Wh
+    buying_energy_mask = energy_consumed > 0
+    selling_energy_mask = energy_consumed < 0
+    cashflow_energy = np.zeros(energy_consumed.shape)
+    cashflow_energy[buying_energy_mask] = energy_consumed[buying_energy_mask] * ELECTRICITY_COST
+    cashflow_energy[selling_energy_mask] = energy_consumed[selling_energy_mask] * ELECTRICITY_RETAIL_PRICE
+    
+    cost = np.sum(cashflow_energy)
+    return cost
 
 def objective_function(real_population, integer_population, permutation_population):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-
-    return sum_of_squared_errors(power_demand_characteristic, power_supply_characteristic)
+    power_consumed = power_demand_characteristic - power_supply_characteristic
+    time_step = (demand_times[1] - demand_times[0])*24
+    cost = calculate_electricity_cost(power_consumed, time_step_hours=time_step)
+    return cost
 
 
 def plot_result(real_population, integer_population):
@@ -331,7 +357,7 @@ def main():
     ga_results(np.deg2rad(np.array([[180,90,270,45,45,45]])), np.array([4]),0,0,0)
     number_of_generations = 100
     number_of_populations = 1000
-    number_of_real_variables = 40*2
+    number_of_real_variables = 20*2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
     azimuth_limit = np.array([[0], [np.deg2rad(360)]])
