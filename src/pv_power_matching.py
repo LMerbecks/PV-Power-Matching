@@ -115,7 +115,6 @@ def plot_sun_position(sun_altitude, sun_polar_angle, sun_azimuth):
     ax_top.plot(sun_altitude)
     ax_mid.plot(sun_polar_angle)
     ax_bot.plot(sun_azimuth)
-    plt.show()
     return
 
 
@@ -170,7 +169,6 @@ def plot_normals(sun_normals, panel_normals):
     axis.set_zlim([-.5, 1])
 
     axis.view_init(elev=30, azim=270, roll=0)
-    plt.show()
     return
 
 
@@ -293,10 +291,10 @@ def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: floa
     Returns:
         float: cost of electricity 
     """
-    ELECTRICITY_COST = 16e-2  # cent per kWh
-    ELECTRICITY_RETAIL_PRICE = 8e-2  # cent per kWh
+    ELECTRICITY_COST = 100e-2  # cent per kWh
+    ELECTRICITY_RETAIL_PRICE = -100e-2  # cent per kWh
 
-    energy_consumed = power_consumed * time_step_hours  # Wh
+    energy_consumed = power_consumed * time_step_hours * 1e-3 # kWh
     buying_energy_mask = energy_consumed > 0
     selling_energy_mask = energy_consumed < 0
     cashflow_energy = np.zeros(energy_consumed.shape)
@@ -315,11 +313,12 @@ def objective_function(real_population, integer_population, permutation_populati
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
     power_consumed = power_demand_characteristic - power_supply_characteristic
-    time_step = (demand_times[1] - demand_times[0])*24
+    time_step = (demand_times[1] - demand_times[0]) * 24
     cost = calculate_electricity_cost(
         power_consumed, time_step_hours=time_step)
-    sse = sum_of_squared_errors(power_demand_characteristic, power_supply_characteristic)
-    return sse
+    sse = sum_of_squared_errors(
+        power_demand_characteristic, power_supply_characteristic)
+    return cost
 
 
 def plot_result(real_population, integer_population):
@@ -328,16 +327,15 @@ def plot_result(real_population, integer_population):
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-
-    plt.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
-    plt.plot(demand_times*24, power_supply_characteristic,
+    fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
+    ax_power.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
+    ax_power.plot(demand_times*24, power_supply_characteristic,
              label='Production curve')
-    plt.grid(visible=True, which='both')
-    plt.xlabel("Time [day]")
-    plt.ylabel("Power [W]")
-    plt.title("Power characteristics for problem")
+    ax_power.grid(visible=True, which='both')
+    ax_power.set_xlabel("Time [day]")
+    ax_power.set_ylabel("Power [W]")
+    ax_power.set_title("Power characteristics for problem")
     plt.legend()
-    plt.show()
 
 
 def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
@@ -345,10 +343,10 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     print(Rbest)
 
     # Plot progress
-    plt.plot(PI_best_progress)
-    plt.xlabel('Generation')
-    plt.ylabel('Best score (% target)')
-    plt.show()
+    fig_progress, ax_progress = plt.subplots(ncols=1, nrows=1)
+    ax_progress.plot(PI_best_progress)
+    ax_progress.set_xlabel('Generation')
+    ax_progress.set_ylabel('Best score (% target)')
 
     plot_result(Rbest, Ibest)
     panel_orientation = map_populations_to_orientation(
@@ -356,13 +354,16 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     panel_normals = panel_normal_from_tilt_and_az(
         panel_orientation[0, :], panel_orientation[1, :])
     plot_normals(sun_normals, panel_normals)
+    
+    plt.show()
     return
 
 
 def main():
+    ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
     number_of_generations = 200
     number_of_populations = 1000
-    max_number_of_panels = 40
+    max_number_of_panels = 20
     number_of_real_variables = max_number_of_panels * 2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
@@ -375,7 +376,7 @@ def main():
     real_variable_limits = np.hstack(
         [azimuth_limits, tilt_limits])  # orientation of panels
     integer_variable_limits = np.array(
-        [[0], [40]]).astype(int)  # number of panels
+        [[0], [max_number_of_panels]]).astype(int)  # number of panels
     tournament_probability = 0.8
     crossover_probability = 0.8
     mutation_probability = 0.075
@@ -385,9 +386,9 @@ def main():
     probability_parameters = np.array(
         [tournament_probability, crossover_probability, mutation_probability])
 
-    PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
-        FILENAME, OBJECTIVE_FUNCTION, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters)
-    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
+    #     FILENAME, OBJECTIVE_FUNCTION, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters)
+    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
 
 
 if __name__ == '__main__':
