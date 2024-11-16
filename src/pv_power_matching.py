@@ -321,7 +321,7 @@ def objective_function(real_population, integer_population, permutation_populati
     return cost
 
 
-def plot_result(real_population, integer_population):
+def plot_result_characteristics(real_population, integer_population):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
@@ -348,7 +348,7 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     ax_progress.set_xlabel('Generation')
     ax_progress.set_ylabel('Best score (% target)')
 
-    plot_result(Rbest, Ibest)
+    plot_result_characteristics(Rbest, Ibest)
     panel_orientation = map_populations_to_orientation(
         real_population=Rbest, integer_population=Ibest)
     panel_normals = panel_normal_from_tilt_and_az(
@@ -360,10 +360,10 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
 
 
 def main():
-    ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
+    # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
     number_of_generations = 200
     number_of_populations = 1000
-    max_number_of_panels = 20
+    max_number_of_panels = 100
     number_of_real_variables = max_number_of_panels * 2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
@@ -386,9 +386,9 @@ def main():
     probability_parameters = np.array(
         [tournament_probability, crossover_probability, mutation_probability])
 
-    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
-    #     FILENAME, OBJECTIVE_FUNCTION, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters)
-    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
+        FILENAME, OBJECTIVE_FUNCTION, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters)
+    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
 
 
 if __name__ == '__main__':
