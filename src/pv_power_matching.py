@@ -164,9 +164,9 @@ def cosine_of_incidence_angle(panel_normal: np.ndarray, sun_normal: np.ndarray) 
 def plot_normals(sun_normals, panel_normals):
     axis = plt.figure().add_subplot(projection='3d')
     axis.quiver(0, 0, 0, sun_normals[0, ::20],
-                sun_normals[1, ::20], sun_normals[2, ::20])
+                sun_normals[1, ::20], sun_normals[2, ::20], color='orange', alpha=0.3, label='Sun normals')
     axis.quiver(
-        0, 0, 0, panel_normals[0, :], panel_normals[1, :], panel_normals[2, :], color='red')
+        0, 0, 0, panel_normals[0, :], panel_normals[1, :], panel_normals[2, :], color='red', label='Panel normals')
 
     axis.set_xlim([-1, 1])
     axis.set_xlabel('North 1')
@@ -175,6 +175,7 @@ def plot_normals(sun_normals, panel_normals):
     axis.set_zlim([-.5, 1])
 
     axis.view_init(elev=30, azim=270, roll=0)
+    axis.legend()
     return
 
 
@@ -338,7 +339,7 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     if isinstance(ax_power, type(None)):
         fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
         
-    ax_power.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
+    ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.5, label='Demand curve')
     ax_power.plot(demand_times*24, power_supply_characteristic,
              label='Production curve')
     ax_power.grid(visible=True, which='both')
