@@ -7,6 +7,7 @@ Breyting frá v3 eru
 - skil á bestu parametrum
 """
 
+from typing import Callable
 import random
 import math
 import numpy as np
@@ -265,10 +266,8 @@ def per_rand_mutation(Pold, pmut):
 # Útgáfa 29.08.24 kl. 13:12
 
 
-def ga_min(obj_file, obj_fun, nvar, Ilimit, Rlimit, pvar):
-    loaded_module = __import__(obj_file)
-    PI_function = getattr(loaded_module, obj_fun)
-
+def ga_min(PI_function: Callable[[np.ndarray, np.ndarray, np.ndarray], float], nvar, Ilimit, Rlimit, pvar, **kwargs):
+    
     ngen = nvar[0]
     npop = nvar[1]
     nrvar = nvar[2]  # Number of real decision variables
@@ -317,7 +316,7 @@ def ga_min(obj_file, obj_fun, nvar, Ilimit, Rlimit, pvar):
 #        PI =  fitness_function(Rpop,Ipop,Ppop)
         PI = np.zeros((npop))
         for ipop in range(npop):
-            PI[ipop] = PI_function(Rpop[ipop][:], Ipop[ipop][:], Ppop[ipop][:])
+            PI[ipop] = PI_function(Rpop[ipop][:], Ipop[ipop][:], Ppop[ipop][:], **kwargs)
 
         PI_best = np.min(PI)
         ind = np.where(PI == PI_best)
@@ -356,7 +355,7 @@ def ga_min(obj_file, obj_fun, nvar, Ilimit, Rlimit, pvar):
             PI = np.zeros((npop))
             for ipop in range(npop):
                 PI[ipop] = PI_function(
-                    Rpop[ipop][:], Ipop[ipop][:], Ppop[ipop][:])
+                    Rpop[ipop][:], Ipop[ipop][:], Ppop[ipop][:], **kwargs)
 
             # Add starting best score to progress tracker
             PI_best_progress.append(PI_best)
