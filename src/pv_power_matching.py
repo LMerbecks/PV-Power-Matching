@@ -413,17 +413,28 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
         histories.append(PI_best_progress)
     
     figure_costs, axes_costs = plt.subplots(nrows=axis_dimension, ncols=axis_dimension)
+    figure_orientations, axes_orientations = plt.subplots(nrows=axis_dimension, ncols=axis_dimension)
     if num_runs == 1:
-        axes_costs = [axes_costs]
+        axes_costs = np.array([axes_costs])
+        axes_orientations = np.array([axes_orientations])
         
-    for axis, realpop, ipop, cost, price in zip(axes_costs.flatten(), angles, used_panels, costs_flat, prices_flat):
+    for axis_char, axis_orient, realpop, ipop, cost, price in zip(axes_costs.flatten(), axes_orientations.flatten(), angles, used_panels, costs_flat, prices_flat):
         cus_title = f'Cost: {cost:.3g}€/kWh | Retail price: {price:.3g}€/kWh'
-        plot_result_characteristics(realpop, ipop, ax_power=axis, title=cus_title)
+        plot_result_characteristics(realpop, ipop, ax_power=axis_char, title=cus_title)
+        panel_orientation = map_populations_to_orientation(realpop, ipop)
+        plot_orientation_histogram(panel_orientation, axis_orient)
         
     figure_costs.suptitle('Power characteristics')
     figure_costs.supxlabel('Electricity cost')
     figure_costs.supylabel('Electricity retail price')
+    figure_costs.set_size_inches(8,5)
     figure_costs.tight_layout()
+    
+    figure_orientations.suptitle('Orientation histograms')
+    figure_orientations.supxlabel('Electricity cost')
+    figure_orientations.supylabel('Electricity retail price')
+    figure_orientations.set_size_inches(8,5)
+    figure_orientations.tight_layout()
     plt.show()
     
     pass
