@@ -7,6 +7,7 @@ from astropy.time import Time
 import astropy.units as u
 
 import matplotlib.pyplot as plt
+from matplotlib import colors
 
 from GA_module_v6 import ga_min
 
@@ -43,7 +44,7 @@ def sun_position_for_time_and_location(time: Time, location: EarthLocation) -> t
     sun_altitude = np.deg2rad(np.array(sun_altitude_azimuth.alt))
     # polar angle is measured from vertical
     sun_polar_angle = np.deg2rad(90) - sun_altitude
-    sun_azimuth = np.deg2rad(np.array(sun_altitude_azimuth.az))
+    sun_azimuth = -np.deg2rad(np.array(sun_altitude_azimuth.az))
     sun_normal = np.array([np.sin(sun_polar_angle) * np.cos(sun_azimuth),
                           np.sin(sun_polar_angle) * np.sin(sun_azimuth), np.cos(sun_polar_angle)])
     sun_above_horizon = sun_altitude > 0
@@ -129,8 +130,8 @@ def panel_normal_from_tilt_and_az(panel_azimuth: float, panel_tilt: float) -> np
     Returns:
         np.ndarray: Normal of panel
     """
-    panel_normal = np.array([np.sin(panel_tilt) * np.cos(panel_azimuth),
-                            np.sin(panel_tilt) * np.sin(panel_azimuth), np.cos(panel_tilt)])
+    panel_normal = np.array([np.sin(panel_tilt) * np.cos(-panel_azimuth),
+                            np.sin(panel_tilt) * np.sin(-panel_azimuth), np.cos(panel_tilt)])
     return panel_normal
 
 
@@ -279,7 +280,7 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     return panel_orientations
 
 
-def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: float) -> float:
+def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: float, electricity_cost:float=35e-2, electricity_retail_price=8e-2) -> float:
     """calculates the electricity cost of a day operating the power
     system and home together. 
 
@@ -287,21 +288,24 @@ def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: floa
         power_consumed (np.ndarray): power consumed over the day
         (negative entries mean power has been sold to the grid)
         time_step_hours (float): constant time step for the power array
+        electricity_cost (float, optional): Cost of buying electricity
+        from the grid in €/kWh. Defaults to 35e-2.
+        electricity_retail_price (_type_, optional): Price for selling
+        electricity to the grid in €/kWh. Defaults to 8e-2.
 
     Returns:
-        float: cost of electricity 
+        float: Total cost of electricity
     """
-    ELECTRICITY_COST = 100e-2  # cent per kWh
-    ELECTRICITY_RETAIL_PRICE = -100e-2  # cent per kWh
+    
 
     energy_consumed = power_consumed * time_step_hours * 1e-3 # kWh
     buying_energy_mask = energy_consumed > 0
     selling_energy_mask = energy_consumed < 0
     cashflow_energy = np.zeros(energy_consumed.shape)
     cashflow_energy[buying_energy_mask] = energy_consumed[buying_energy_mask] * \
-        ELECTRICITY_COST
+        electricity_cost
     cashflow_energy[selling_energy_mask] = energy_consumed[selling_energy_mask] * \
-        ELECTRICITY_RETAIL_PRICE
+        electricity_retail_price
 
     cost = np.sum(cashflow_energy)
     return cost
@@ -327,7 +331,7 @@ def plot_result_characteristics(real_population, integer_population):
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
+    _, ax_power = plt.subplots(nrows=1, ncols=1)
     ax_power.plot(demand_times*24, power_demand_characteristic, label='Demand curve')
     ax_power.plot(demand_times*24, power_supply_characteristic,
              label='Production curve')
@@ -336,6 +340,19 @@ def plot_result_characteristics(real_population, integer_population):
     ax_power.set_ylabel("Power [W]")
     ax_power.set_title("Power characteristics for problem")
     plt.legend()
+    
+def plot_orientation_histogram(panel_orientation: np.ndarray):
+    _, axis_orientation = plt.subplots()
+    azimuth_degree = np.rad2deg(panel_orientation[0,:])
+    tilt_degree = np.rad2deg(panel_orientation[1,:])
+    azimuth_range = [0,360]
+    tilt_range = [0,90]
+    azimuth_bins = 36
+    tilt_bins = 9
+    axis_orientation.hist2d(azimuth_degree, tilt_degree, bins=[azimuth_bins, tilt_bins], norm=colors.LogNorm(), range=[azimuth_range, tilt_range])
+    axis_orientation.set_xlabel('Panel Azimuth [°]')
+    axis_orientation.set_ylabel('Panel Tilt [°]')
+    axis_orientation.set_title('Distribution of panel orientations')
 
 
 def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
@@ -343,7 +360,7 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     print(Rbest)
 
     # Plot progress
-    fig_progress, ax_progress = plt.subplots(ncols=1, nrows=1)
+    _, ax_progress = plt.subplots(ncols=1, nrows=1)
     ax_progress.plot(PI_best_progress)
     ax_progress.set_xlabel('Generation')
     ax_progress.set_ylabel('Best score (% target)')
@@ -354,7 +371,7 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     panel_normals = panel_normal_from_tilt_and_az(
         panel_orientation[0, :], panel_orientation[1, :])
     plot_normals(sun_normals, panel_normals)
-    
+    plot_orientation_histogram(panel_orientation)
     plt.show()
     return
 
@@ -363,7 +380,7 @@ def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
     number_of_generations = 200
     number_of_populations = 1000
-    max_number_of_panels = 100
+    max_number_of_panels = 20
     number_of_real_variables = max_number_of_panels * 2
     number_of_integer_variables = 1
     number_of_permutation_variables = 0
