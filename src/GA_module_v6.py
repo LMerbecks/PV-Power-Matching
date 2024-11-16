@@ -266,7 +266,7 @@ def per_rand_mutation(Pold, pmut):
 # Útgáfa 29.08.24 kl. 13:12
 
 
-def ga_min(PI_function: Callable[[np.ndarray, np.ndarray, np.ndarray], float], nvar, Ilimit, Rlimit, pvar, **kwargs):
+def ga_min(PI_function: Callable[[np.ndarray, np.ndarray, np.ndarray], float], nvar, Ilimit, Rlimit, pvar, verbose=True, **kwargs):
     
     ngen = nvar[0]
     npop = nvar[1]
@@ -326,8 +326,8 @@ def ga_min(PI_function: Callable[[np.ndarray, np.ndarray, np.ndarray], float], n
             Ibest = np.array(Ipop[ind[0]][:])
         if (npvar > 0):
             Pbest = np.array(Ppop[ind[0]][:])
-
-        print('Starting best score, %0.3f: ' % PI_best)
+        if verbose:
+            print('Starting best score, %0.3f: ' % PI_best)
         # Add starting best score to progress tracker
         PI_best_progress.append(PI_best)
 
@@ -373,15 +373,16 @@ def ga_min(PI_function: Callable[[np.ndarray, np.ndarray, np.ndarray], float], n
                     Pbest = np.array(Ppop[ind[0][0]][:])
 
 #                print('Number of runs:   ',iga)
-                print('Number of generations: ', igen)
-                print('Best score: %0.3f' % (PI_best))
-                print('Best individual: ')
-                if (nrvar > 0):
-                    print("Real variable:       ", Rbest[:])
-                if (nivar > 0):
-                    print("Integer variable:    ", Ibest[:])
-                if (npvar > 0):
-                    print("Permutation variable:", Pbest[:])
+                if verbose:
+                    print('Number of generations: ', igen)
+                    print('Best score: %0.3f' % (PI_best))
+                    print('Best individual: ')
+                    if (nrvar > 0):
+                        print("Real variable:       ", Rbest[:])
+                    if (nivar > 0):
+                        print("Integer variable:    ", Ibest[:])
+                    if (npvar > 0):
+                        print("Permutation variable:", Pbest[:])
                 PI[0] = PI_best
                 if (nrvar > 0):
                     Rpop[0, :] = Rbest[:]
