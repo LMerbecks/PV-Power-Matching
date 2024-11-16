@@ -473,9 +473,9 @@ def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=20, verbose:
     return PI_best,Rbest,Ibest,Pbest,PI_best_progress
 
 def statistical_run(num_runs:int, load_data:bool=False):
-    filename = '../dat/statistical_run_pv_matching.csv'
+    filename = '../dat/statistical_run_pv_matching.json'
     if load_data:
-        statistical_data_set = pd.read_csv(filename)
+        statistical_data_set = pd.read_json(filename)
     else:    
         total_costs = []
         angles = []
@@ -492,7 +492,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
         
         data = {'PI_best': total_costs, 'Real_best': angles, 'Int_best': used_panels, 'PI_history': histories}
         statistical_data_set = pd.DataFrame(data=data)
-        statistical_data_set.to_csv(filename) 
+        statistical_data_set.to_json(filename) 
     
     best_PI = statistical_data_set['PI_best'].min()
     best_run_mask = statistical_data_set['PI_best'] == best_PI
