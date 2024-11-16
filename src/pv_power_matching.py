@@ -349,8 +349,11 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     ax_power.set_title(title)
     ax_power.legend()
     
-def plot_orientation_histogram(panel_orientation: np.ndarray):
-    _, axis_orientation = plt.subplots()
+def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None):
+    if isinstance(axis, type(None)):
+        _, axis_orientation = plt.subplots()
+    else:
+        axis_orientation = axis
     azimuth_degree = np.rad2deg(panel_orientation[0,:])
     tilt_degree = np.rad2deg(panel_orientation[1,:])
     azimuth_range = [0,360]
