@@ -11,6 +11,11 @@ from matplotlib import colors
 
 from GA_module_v6 import ga_min
 
+import os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+
 ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
 FILENAME = pathlib.Path(__file__).stem
 OBJECTIVE_FUNCTION = 'objective_function'
@@ -352,9 +357,12 @@ def plot_orientation_histogram(panel_orientation: np.ndarray):
     azimuth_bins = 36
     tilt_bins = 9
     axis_orientation.hist2d(azimuth_degree, tilt_degree, bins=[azimuth_bins, tilt_bins], norm=colors.LogNorm(), range=[azimuth_range, tilt_range])
+    axis_orientation.set_xticks(np.linspace(0,360,int(azimuth_bins/3) + 1))
+    axis_orientation.set_yticks(np.linspace(0,90,tilt_bins+1))
     axis_orientation.set_xlabel('Panel Azimuth [°]')
     axis_orientation.set_ylabel('Panel Tilt [°]')
     axis_orientation.set_title('Distribution of panel orientations')
+    axis_orientation.grid(visible=True, which='both')
 
 
 def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
@@ -365,7 +373,9 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     _, ax_progress = plt.subplots(ncols=1, nrows=1)
     ax_progress.plot(PI_best_progress)
     ax_progress.set_xlabel('Generation')
-    ax_progress.set_ylabel('Best score (% target)')
+    ax_progress.set_ylabel('Best score')
+    ax_progress.set_title('Progress over generations')
+    ax_progress.grid(visible=True, which='both')
 
     plot_result_characteristics(Rbest, Ibest)
     panel_orientation = map_populations_to_orientation(
@@ -416,7 +426,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
 
 
 
-def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=40, verbose:bool=True, electricity_cost:float=35e-2, electricity_price:float=8e-2):
+def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=20, verbose:bool=True, electricity_cost:float=35e-2, electricity_price:float=8e-2):
     number_of_generations = num_gen
     number_of_populations = num_pop
     max_number_of_panels = max_num_panels
@@ -447,11 +457,48 @@ def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=40, verbose:
         
     return PI_best,Rbest,Ibest,Pbest,PI_best_progress
 
+def statistical_run(num_runs:int, load_data:bool=False):
+    filename = '../dat/statistical_run_pv_matching.csv'
+    if load_data:
+        statistical_data_set = pd.read_csv(filename)
+    else:    
+        total_costs = []
+        angles = []
+        used_panels = []
+        histories = []
+        
+        for index in range(num_runs):
+            print(f'Running scenario {index+1}')
+            PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=1000, verbose=False)
+            total_costs.append(PI_best)
+            angles.append(Rbest)
+            used_panels.append(Ibest)
+            histories.append(PI_best_progress)
+        
+        data = {'PI_best': total_costs, 'Real_best': angles, 'Int_best': used_panels, 'PI_history': histories}
+        statistical_data_set = pd.DataFrame(data=data)
+        statistical_data_set.to_csv(filename) 
+    
+    best_PI = statistical_data_set['PI_best'].min()
+    best_run_mask = statistical_data_set['PI_best'] == best_PI
+    best_angles = statistical_data_set.loc[best_run_mask, 'Real_best'].values
+    best_used_panels = statistical_data_set.loc[best_run_mask, 'Int_best'].values
+    best_history = statistical_data_set.loc[best_run_mask, 'PI_history'].values
+    
+    histogram = statistical_data_set['PI_best'].hist()
+    histogram.set_title('Histogram of best costs')
+    histogram.set_xlabel('Energy cost [€]')
+    histogram.set_ylabel('Frequency')
+    
+    ga_results(best_angles[0], best_used_panels[0], [], best_PI, best_history[0])
+    
+
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
     # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=1000)
     # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
-    different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
+    # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
+    statistical_run(25)
 
 if __name__ == '__main__':
     main()
