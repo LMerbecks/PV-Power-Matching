@@ -315,6 +315,42 @@ def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: floa
     cost = np.sum(cashflow_energy)
     return cost
 
+def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: float=10e3, battery_max_power: float=3e3)->tuple[np.ndarray, np.ndarray]:
+    battery_charge = np.zeros(power_supply_characteristic.shape)
+    battery_power = np.zeros(power_supply_characteristic.shape)
+    time_step_hours = (demand_times[1] - demand_times[0]) * 24
+    combined_demands = power_demand_characteristic - power_supply_characteristic
+    
+    for i in range(1, len(combined_demands)):
+        if combined_demands[i] < 0:  # Charge battery
+            potential_power = min(-combined_demands[i], battery_max_power)
+            charge_increment = potential_power * time_step_hours
+            battery_charge[i] = min(battery_charge[i - 1] + charge_increment, battery_capacity)
+            battery_power[i] = -potential_power
+        elif combined_demands[i] > 0:  # Discharge battery
+            potential_power = min(combined_demands[i], battery_max_power)
+            discharge_increment = potential_power * time_step_hours
+            if battery_charge[i - 1] >= discharge_increment:
+                battery_charge[i] = battery_charge[i - 1] - discharge_increment
+                battery_power[i] = potential_power
+            else:
+                battery_charge[i] = battery_charge[i - 1]
+                battery_power[i] = 0
+        else:
+            battery_charge[i] = battery_charge[i - 1]
+            battery_power[i] = 0
+            
+    return battery_power, battery_charge
+    
+
+def simulate_home_as_grid_load(power_supply_characteristic):
+    battery_power, battery_charge = simulate_battery(power_supply_characteristic)
+    battery_draining = battery_power > 0
+    battery_supplied_power = np.zeros(power_supply_characteristic.shape)
+    battery_supplied_power[battery_draining] = battery_power[battery_draining]
+    internally_supplied_power = power_supply_characteristic + battery_power
+    power_consumed_from_grid = power_demand_characteristic - internally_supplied_power
+    return power_consumed_from_grid, battery_power, battery_charge
 
 def objective_function(real_population, integer_population, permutation_population, **kwargs):
     panel_orientations = map_populations_to_orientation(
