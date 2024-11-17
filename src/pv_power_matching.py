@@ -326,7 +326,10 @@ def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: f
             potential_power = min(-combined_demands[i], battery_max_power)
             charge_increment = potential_power * time_step_hours
             battery_charge[i] = min(battery_charge[i - 1] + charge_increment, battery_capacity)
-            battery_power[i] = -potential_power
+            if battery_charge[i - 1] < battery_capacity:
+                battery_power[i] = -potential_power
+            else:
+                battery_power[i] = 0
         elif combined_demands[i] > 0:  # Discharge battery
             potential_power = min(combined_demands[i], battery_max_power)
             discharge_increment = potential_power * time_step_hours
@@ -345,9 +348,6 @@ def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: f
 
 def simulate_home_as_grid_load(power_supply_characteristic):
     battery_power, battery_charge = simulate_battery(power_supply_characteristic)
-    battery_draining = battery_power > 0
-    battery_supplied_power = np.zeros(power_supply_characteristic.shape)
-    battery_supplied_power[battery_draining] = battery_power[battery_draining]
     internally_supplied_power = power_supply_characteristic + battery_power
     power_consumed_from_grid = power_demand_characteristic - internally_supplied_power
     return power_consumed_from_grid, battery_power, battery_charge
@@ -365,7 +365,7 @@ def objective_function(real_population, integer_population, permutation_populati
         power_demand_characteristic, power_supply_characteristic)
     return cost
 
-def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics"):
+def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics", add_legend:bool=True):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
@@ -391,13 +391,15 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     ax_power.plot(demand_times*24, internally_supplied_power, label='Total supplied power')
     ax_power.plot(demand_times*24, battery_charge/10, linestyle='dashed', label='Battery charge [hWh]')
     ax_power.grid(visible=True, which='both')
-    ax_power.set_xlabel("Time [day]")
+    ax_power.set_xticks(np.linspace(0,24,8+1))
+    ax_power.set_xlabel("Time [hour UTC]")
     ax_power.set_ylabel("Power [W]")
         
     ax_power.set_title(title)
-    ax_power.legend()
+    if add_legend:
+        ax_power.legend()
     
-def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None):
+def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None, title:str='Distribution of panel orientations'):
     if isinstance(axis, type(None)):
         _, axis_orientation = plt.subplots()
     else:
@@ -413,7 +415,8 @@ def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None
     axis_orientation.set_yticks(np.linspace(0,90,tilt_bins+1))
     axis_orientation.set_xlabel('Panel Azimuth [°]')
     axis_orientation.set_ylabel('Panel Tilt [°]')
-    axis_orientation.set_title('Distribution of panel orientations')
+    
+    axis_orientation.set_title(title)
     axis_orientation.grid(visible=True, which='both')
 
 
@@ -454,7 +457,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
     
     for index in range(num_runs):
         print(f'Running scenario {index}: Cost {costs_flat[index]}, Price {prices_flat[index]}')
-        PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=1000, verbose=False, electricity_cost=costs_flat[index], electricity_price=prices_flat[index])
+        PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=500, verbose=False, electricity_cost=costs_flat[index], electricity_price=prices_flat[index])
         total_costs.append(PI_best)
         angles.append(Rbest)
         used_panels.append(Ibest)
@@ -466,22 +469,24 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
         axes_costs = np.array([axes_costs])
         axes_orientations = np.array([axes_orientations])
         
-    for axis_char, axis_orient, realpop, ipop, cost, price in zip(axes_costs.flatten(), axes_orientations.flatten(), angles, used_panels, costs_flat, prices_flat):
-        cus_title = f'Cost: {cost:.3g}€/kWh | Retail price: {price:.3g}€/kWh'
-        plot_result_characteristics(realpop, ipop, ax_power=axis_char, title=cus_title)
+    for axis_char, axis_orient, realpop, ipop, cost, price, total_cost in zip(axes_costs.flatten(), axes_orientations.flatten(), angles, used_panels, costs_flat, prices_flat, total_costs):
+        cus_title = f'C: {cost:.3g} | P: {price:.3g} | total cost: {total_cost:.3g}€'
+        cus_title_hist = f'C: {cost:.3g} | P: {price:.3g} | panels: {ipop}'
+        plot_result_characteristics(realpop, ipop, ax_power=axis_char, title=cus_title, add_legend=False)
         panel_orientation = map_populations_to_orientation(realpop, ipop)
-        plot_orientation_histogram(panel_orientation, axis_orient)
+        plot_orientation_histogram(panel_orientation, axis_orient, cus_title_hist)
         
     figure_costs.suptitle('Power characteristics')
-    figure_costs.supxlabel('Electricity cost')
-    figure_costs.supylabel('Electricity retail price')
-    figure_costs.set_size_inches(8,5)
+    figure_costs.supxlabel('Electricity cost C [€/kWh]')
+    figure_costs.supylabel('Electricity retail price P [€/kWh]')
+    figure_costs.set_size_inches(15,10)
+    figure_costs.legend(labels=axes_costs[0,0].get_legend_handles_labels()[1])
     figure_costs.tight_layout()
     
     figure_orientations.suptitle('Orientation histograms')
-    figure_orientations.supxlabel('Electricity cost')
-    figure_orientations.supylabel('Electricity retail price')
-    figure_orientations.set_size_inches(8,5)
+    figure_orientations.supxlabel('Electricity cost C [€/kWh]')
+    figure_orientations.supylabel('Electricity retail price P [€/kWh]')
+    figure_orientations.set_size_inches(15,10)
     figure_orientations.tight_layout()
     plt.show()
     
@@ -558,10 +563,10 @@ def statistical_run(num_runs:int, load_data:bool=False):
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=500, verbose=True)
-    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
-    # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=1)
-    statistical_run(100, load_data=False)
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=500, verbose=True)
+    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
+    # statistical_run(100, load_data=False)
     pass
 
 if __name__ == '__main__':
