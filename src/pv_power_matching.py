@@ -365,7 +365,6 @@ def objective_function(real_population, integer_population, permutation_populati
         power_demand_characteristic, power_supply_characteristic)
     return cost
 
-
 def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics"):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
@@ -559,10 +558,10 @@ def statistical_run(num_runs:int, load_data:bool=False):
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=1000)
-    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=1000, verbose=True)
+    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
     # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=1)
-    statistical_run(1, load_data=False)
+    # statistical_run(1, load_data=False)
 
 if __name__ == '__main__':
     main()
