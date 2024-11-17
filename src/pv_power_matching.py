@@ -357,7 +357,7 @@ def objective_function(real_population, integer_population, permutation_populati
         real_population, integer_population)
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    power_consumed = power_demand_characteristic - power_supply_characteristic
+    power_consumed = simulate_home_as_grid_load(power_supply_characteristic)[0]
     time_step = (demand_times[1] - demand_times[0]) * 24
     cost = calculate_electricity_cost(
         power_consumed, time_step_hours=time_step, **kwargs)
