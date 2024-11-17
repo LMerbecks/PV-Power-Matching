@@ -315,7 +315,7 @@ def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: floa
     cost = np.sum(cashflow_energy)
     return cost
 
-def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: float=10e3, battery_max_power: float=3e3)->tuple[np.ndarray, np.ndarray]:
+def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: float=5e3, battery_max_power: float=1e3)->tuple[np.ndarray, np.ndarray]:
     battery_charge = np.zeros(power_supply_characteristic.shape)
     battery_power = np.zeros(power_supply_characteristic.shape)
     time_step_hours = (demand_times[1] - demand_times[0]) * 24
@@ -532,7 +532,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
         
         for index in range(num_runs):
             print(f'Running scenario {index+1}')
-            PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=1000, verbose=False)
+            PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=500, verbose=False)
             total_costs.append(PI_best)
             angles.append(Rbest)
             used_panels.append(Ibest)
@@ -558,10 +558,11 @@ def statistical_run(num_runs:int, load_data:bool=False):
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=1000, verbose=True)
-    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=500, verbose=True)
+    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
     # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=1)
-    # statistical_run(1, load_data=False)
+    statistical_run(100, load_data=False)
+    pass
 
 if __name__ == '__main__':
     main()
