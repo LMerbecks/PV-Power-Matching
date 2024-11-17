@@ -372,12 +372,25 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
+    battery_power, battery_charge = simulate_battery(power_supply_characteristic)
+    battery_draining = battery_power > 0
+    battery_charging = battery_power < 0
+    battery_supplied_power = np.zeros(power_supply_characteristic.shape)
+    battery_supplied_power[battery_draining] = battery_power[battery_draining]
+    battery_stored_power = np.zeros(power_supply_characteristic.shape)
+    battery_stored_power[battery_charging] = battery_power[battery_charging]
+    internally_supplied_power = power_supply_characteristic + battery_power
+    
     if isinstance(ax_power, type(None)):
         fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
         
     ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.5, label='Demand curve')
     ax_power.plot(demand_times*24, power_supply_characteristic,
-             label='Production curve')
+             label='PV production curve')
+    ax_power.plot(demand_times*24, battery_stored_power, label='Battery stored power')
+    ax_power.plot(demand_times*24, battery_supplied_power, label='Battery supplied power')
+    ax_power.plot(demand_times*24, internally_supplied_power, label='Total supplied power')
+    ax_power.plot(demand_times*24, battery_charge/10, linestyle='dashed', label='Battery charge [hWh]')
     ax_power.grid(visible=True, which='both')
     ax_power.set_xlabel("Time [day]")
     ax_power.set_ylabel("Power [W]")
