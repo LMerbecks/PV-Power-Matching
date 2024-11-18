@@ -347,18 +347,23 @@ def simulate_battery(power_supply_characteristic:np.ndarray, battery_capacity: f
     return battery_power, battery_charge
     
 
-def simulate_home_as_grid_load(power_supply_characteristic):
-    battery_power, battery_charge = simulate_battery(power_supply_characteristic)
+def simulate_home_as_grid_load(power_supply_characteristic, has_battery:bool=True):
+    if has_battery:
+        battery_power, battery_charge = simulate_battery(power_supply_characteristic)
+    else:
+        battery_power = np.zeros(power_supply_characteristic.shape)
+        battery_charge = np.zeros(power_supply_characteristic.shape)
+        
     internally_supplied_power = power_supply_characteristic + battery_power
     power_consumed_from_grid = power_demand_characteristic - internally_supplied_power
     return power_consumed_from_grid, battery_power, battery_charge
 
-def objective_function(real_population, integer_population, permutation_population, **kwargs):
+def objective_function(real_population, integer_population, permutation_population, has_battery:bool=True, **kwargs):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    power_consumed = simulate_home_as_grid_load(power_supply_characteristic)[0]
+    power_consumed = simulate_home_as_grid_load(power_supply_characteristic, has_battery)[0]
     time_step = (demand_times[1] - demand_times[0]) * 24
     cost = calculate_electricity_cost(
         power_consumed, time_step_hours=time_step, **kwargs)
@@ -366,13 +371,13 @@ def objective_function(real_population, integer_population, permutation_populati
         power_demand_characteristic, power_supply_characteristic)
     return cost
 
-def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics", add_legend:bool=True):
+def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics", add_legend:bool=True, has_battery:bool=True):
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    battery_power, battery_charge = simulate_battery(power_supply_characteristic)
+    battery_power, battery_charge = simulate_battery(power_supply_characteristic, has_battery)
     battery_draining = battery_power > 0
     battery_charging = battery_power < 0
     battery_supplied_power = np.zeros(power_supply_characteristic.shape)
@@ -433,13 +438,13 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     ax_progress.set_title('Progress over generations')
     ax_progress.grid(visible=True, which='both')
 
-    plot_result_characteristics(Rbest, Ibest)
+    plot_result_characteristics(Rbest, Ibest, has_battery=HAS_BATTERY, title=f'Power characteristics\nLowest cost: {PI_best:.3g}€')
     panel_orientation = map_populations_to_orientation(
         real_population=Rbest, integer_population=Ibest)
     panel_normals = panel_normal_from_tilt_and_az(
         panel_orientation[0, :], panel_orientation[1, :])
     plot_normals(sun_normals, panel_normals)
-    plot_orientation_histogram(panel_orientation)
+    plot_orientation_histogram(panel_orientation, title=f'Distribution of panel orientations\nPanels used {Ibest}')
     plt.show()
     return
 
@@ -473,7 +478,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
     for axis_char, axis_orient, realpop, ipop, cost, price, total_cost in zip(axes_costs.flatten(), axes_orientations.flatten(), angles, used_panels, costs_flat, prices_flat, total_costs):
         cus_title = f'C: {cost:.3g} | P: {price:.3g} | total cost: {total_cost:.3g}€'
         cus_title_hist = f'C: {cost:.3g} | P: {price:.3g} | panels: {ipop}'
-        plot_result_characteristics(realpop, ipop, ax_power=axis_char, title=cus_title, add_legend=False)
+        plot_result_characteristics(realpop, ipop, ax_power=axis_char, title=cus_title, add_legend=False, has_battery=HAS_BATTERY)
         panel_orientation = map_populations_to_orientation(realpop, ipop)
         plot_orientation_histogram(panel_orientation, axis_orient, cus_title_hist)
         
@@ -522,7 +527,7 @@ def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=20, verbose:
         [tournament_probability, crossover_probability, mutation_probability])
 
     PI_best, Rbest, Ibest, Pbest, PI_best_progress = ga_min(
-        objective_function, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters, verbose, electricity_cost=electricity_cost, electricity_retail_price=electricity_price)
+        objective_function, size_parameters, integer_variable_limits, real_variable_limits, probability_parameters, verbose, electricity_cost=electricity_cost, electricity_retail_price=electricity_price, has_battery=HAS_BATTERY)
         
     return PI_best,Rbest,Ibest,Pbest,PI_best_progress
 
@@ -561,6 +566,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
     
     ga_results(best_angles[0], best_used_panels[0], [], best_PI, best_history[0])
     
+HAS_BATTERY = False
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
