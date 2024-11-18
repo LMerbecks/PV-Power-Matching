@@ -574,9 +574,9 @@ def statistical_run(num_runs:int, load_data:bool=False):
     
 
 def main():
-    ga_results(np.deg2rad(np.array([180,180,270,90,45,45,45,45])),np.array([4]), 0,0,0)
-    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
-    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    # ga_results(np.deg2rad(np.array([180,180,270,90,45,45,45,45])),np.array([4]), 0,0,0)
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
+    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
     # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
     # statistical_run(100, load_data=False)
     pass
