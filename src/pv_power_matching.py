@@ -17,9 +17,10 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
-FILENAME = pathlib.Path(__file__).stem
-OBJECTIVE_FUNCTION = 'objective_function'
-
+GENERATIONS = 100
+INDIVIDUALS = 500
+RUNS_STATISTICAL = 100
+RUNS_COSTS = 9
 
 def load_characteristic():
     JSON_DATA_FILE_NAME = ABS_FILE_PATH / '..' / 'dat' / \
@@ -286,7 +287,7 @@ def map_populations_to_orientation(real_population: np.ndarray, integer_populati
     return panel_orientations
 
 
-def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: float, electricity_cost: float=35e-2, electricity_retail_price:float=8e-2) -> float:
+def calculate_electricity_cost(power_consumed: np.ndarray, time_step_hours: float, electricity_cost: float=41e-2, electricity_retail_price:float=8e-2) -> float:
     """calculates the electricity cost of a day operating the power
     system and home together. 
 
@@ -457,7 +458,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
     
     for index in range(num_runs):
         print(f'Running scenario {index}: Cost {costs_flat[index]}, Price {prices_flat[index]}')
-        PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=500, verbose=False, electricity_cost=costs_flat[index], electricity_price=prices_flat[index])
+        PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=False, electricity_cost=costs_flat[index], electricity_price=prices_flat[index])
         total_costs.append(PI_best)
         angles.append(Rbest)
         used_panels.append(Ibest)
@@ -494,7 +495,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
 
 
 
-def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=20, verbose:bool=True, electricity_cost:float=35e-2, electricity_price:float=8e-2):
+def optimize_pv_system(num_gen:int, num_pop:int, max_num_panels:int=20, verbose:bool=True, electricity_cost:float=41e-2, electricity_price:float=8e-2):
     number_of_generations = num_gen
     number_of_populations = num_pop
     max_number_of_panels = max_num_panels
@@ -537,7 +538,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
         
         for index in range(num_runs):
             print(f'Running scenario {index+1}')
-            PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=200, num_pop=500, verbose=False)
+            PI_best, Rbest, Ibest, _, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=False)
             total_costs.append(PI_best)
             angles.append(Rbest)
             used_panels.append(Ibest)
@@ -563,7 +564,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=100, num_pop=500, verbose=True)
+    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
     ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
     # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
     # statistical_run(100, load_data=False)
