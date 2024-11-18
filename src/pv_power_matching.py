@@ -402,23 +402,34 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     
 def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None, title:str='Distribution of panel orientations'):
     if isinstance(axis, type(None)):
-        _, axis_orientation = plt.subplots()
+        _, axis_orientation = plt.subplots(subplot_kw=dict(projection="polar"))
     else:
         axis_orientation = axis
-    azimuth_degree = np.rad2deg(panel_orientation[0,:])
-    tilt_degree = np.rad2deg(panel_orientation[1,:])
+
+    azimut_rad = panel_orientation[0,:]
+    tilt_rad = panel_orientation[0,:]
+    azimuth_degree = np.rad2deg(azimut_rad)
+    tilt_degree = np.rad2deg(tilt_rad)
     azimuth_range = [0,360]
     tilt_range = [0,90]
-    azimuth_bins = 36
-    tilt_bins = 9
-    axis_orientation.hist2d(azimuth_degree, tilt_degree, bins=[azimuth_bins, tilt_bins], norm=colors.LogNorm(), range=[azimuth_range, tilt_range])
-    axis_orientation.set_xticks(np.linspace(0,360,int(azimuth_bins/3) + 1))
-    axis_orientation.set_yticks(np.linspace(0,90,tilt_bins+1))
+    num_azimuth_bins = 36
+    num_tilt_bins = 9
+    tilt_bins = np.linspace(0,90, num_tilt_bins+1)
+    azimut_bins = np.linspace(0,2*np.pi, num_azimuth_bins+1)
+    #calculate histogram
+    hist, _, _ = np.histogram2d(azimut_rad, tilt_degree, bins=(azimut_bins, tilt_bins))
+    azimut_mesh, tilt_mesh = np.meshgrid(azimut_bins, tilt_bins)
+    polar_hist = axis_orientation.pcolormesh(azimut_mesh, tilt_mesh, hist.T, norm=colors.LogNorm(), cmap="magma_r")
+    axis_orientation.set_xticks(azimut_bins)
+    axis_orientation.set_yticks(tilt_bins)
     axis_orientation.set_xlabel('Panel Azimuth [°]')
-    axis_orientation.set_ylabel('Panel Tilt [°]')
+    axis_orientation.set_ylabel('Panel Tilt [°]',labelpad=20)
+    axis_orientation.set_theta_offset(np.pi/2)
     
     axis_orientation.set_title(title)
     axis_orientation.grid(visible=True, which='both')
+    
+    
 
 
 def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
@@ -563,9 +574,9 @@ def statistical_run(num_runs:int, load_data:bool=False):
     
 
 def main():
-    # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
-    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    ga_results(np.deg2rad(np.array([180,180,270,90,45,45,45,45])),np.array([4]), 0,0,0)
+    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
+    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
     # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
     # statistical_run(100, load_data=False)
     pass
