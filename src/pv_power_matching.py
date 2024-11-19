@@ -17,7 +17,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 ABS_FILE_PATH = pathlib.Path(__file__).parent.resolve()
-GENERATIONS = 100
+GENERATIONS = 200
 INDIVIDUALS = 500
 RUNS_STATISTICAL = 100
 RUNS_COSTS = 9
@@ -389,16 +389,19 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     
     if isinstance(ax_power, type(None)):
         fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
-        
-    ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.2, label='Demand curve', color=curve_colors['demand'])
+    else:
+        fig_chars = ax_power.get_figure()
+    
+    ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.2, label='Demand power', color=curve_colors['demand'])
     ax_power.plot(demand_times*24, power_supply_characteristic,
-             label='PV production curve', color=curve_colors['PVS'])
-    ax_power.plot(demand_times*24, battery_power, label='Battery power', color=curve_colors['battery'])
-    ax_power.plot(demand_times*24, internally_supplied_power, label='Total supplied power', color=curve_colors['supply'])
-    ax_power.plot(demand_times*24, grid_load_power, label='Total supplied power', color=curve_colors['grid_load'])
-    ax_charge = ax_power.twinx()
-    ax_charge.plot(demand_times*24, battery_charge, linestyle='dashed', label='Battery charge', color=curve_colors['battery'])
-    ax_charge.set_ylabel('Charge [Wh]')
+             label='PVS power', color=curve_colors['PVS'])
+    if has_battery:
+        ax_power.plot(demand_times*24, battery_power, label='Battery power', color=curve_colors['battery'])
+        ax_power.plot(demand_times*24, internally_supplied_power, label='Supply power', color=curve_colors['supply'])
+        ax_charge = ax_power.twinx()
+        ax_charge.plot(demand_times*24, battery_charge, linestyle='dashed', label='Battery charge', color=curve_colors['battery'])
+        ax_charge.set_ylabel('Charge [Wh]')
+    ax_power.plot(demand_times*24, grid_load_power, label='Grid power', color=curve_colors['grid_load'])
     ax_power.grid(visible=True, which='both')
     ax_power.set_xticks(np.linspace(0,24,8+1))
     ax_power.set_xlabel("Time [hour UTC]")
@@ -407,7 +410,8 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     ax_power.set_title(title)
     if add_legend:
         ax_power.legend()
-        ax_charge.legend()
+        if has_battery:
+            ax_charge.legend()
     
     fig_chars.tight_layout()
     
@@ -433,8 +437,14 @@ def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None
 
 
 def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
-    print(Ibest)
-    print(Rbest)
+    panel_orientation = map_populations_to_orientation(
+        real_population=Rbest, integer_population=Ibest)
+    
+    np.set_printoptions(precision=0)
+    print(f'Minimal energy cost: {PI_best:.3g} €')
+    print(f'Total panels used: {Ibest}')
+    print(f'Panel azimuth angles: {np.rad2deg(panel_orientation[0,:])}°')
+    print(f'Panel tilt angles: {np.rad2deg(panel_orientation[1,:])}°')
 
     # Plot progress
     _, ax_progress = plt.subplots(ncols=1, nrows=1)
@@ -445,12 +455,10 @@ def ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress):
     ax_progress.grid(visible=True, which='both')
 
     plot_result_characteristics(Rbest, Ibest, has_battery=HAS_BATTERY, title=f'Power characteristics\nLowest cost: {PI_best:.3g}€')
-    panel_orientation = map_populations_to_orientation(
-        real_population=Rbest, integer_population=Ibest)
     panel_normals = panel_normal_from_tilt_and_az(
         panel_orientation[0, :], panel_orientation[1, :])
     plot_normals(sun_normals, panel_normals)
-    plot_orientation_histogram(panel_orientation, title=f'Distribution of panel orientations\nPanels used {Ibest}')
+    plot_orientation_histogram(panel_orientation, title=f'Distribution of panel orientations\nPanels used {Ibest[0]}')
     plt.show()
     return
 
@@ -498,7 +506,7 @@ def different_costs_run(cost_limits:tuple, price_limits:tuple, num_runs:int=9):
     figure_orientations.suptitle('Orientation histograms')
     figure_orientations.supxlabel('Electricity cost C [€/kWh]')
     figure_orientations.supylabel('Electricity retail price P [€/kWh]')
-    figure_orientations.set_size_inches(15,10)
+    figure_orientations.set_size_inches(12,8)
     figure_orientations.tight_layout()
     plt.show()
     
@@ -541,6 +549,9 @@ def statistical_run(num_runs:int, load_data:bool=False):
     filename = '../dat/statistical_run_pv_matching.json'
     if load_data:
         statistical_data_set = pd.read_json(filename)
+        statistical_data_set['Real_best'] = statistical_data_set['Real_best'].apply(lambda x: np.array(x))
+        statistical_data_set['Int_best'] = statistical_data_set['Int_best'].apply(lambda x: np.array(x))
+        statistical_data_set['PI_history'] = statistical_data_set['PI_history'].apply(lambda x: np.array(x))
     else:    
         total_costs = []
         angles = []
@@ -576,10 +587,10 @@ HAS_BATTERY = True
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
-    PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
-    ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
-    # different_costs_run(cost_limits=[(35-15)*1e-2, (35+15)*1e-2], price_limits=[(8-15)*1e-2, (8+15)*1e-2], num_runs=9)
-    # statistical_run(100, load_data=False)
+    # PI_best, Rbest, Ibest, Pbest, PI_best_progress = optimize_pv_system(num_gen=GENERATIONS, num_pop=INDIVIDUALS, verbose=True)
+    # ga_results(Rbest, Ibest, Pbest, PI_best, PI_best_progress)
+    # different_costs_run(cost_limits=[(41)*1e-2, (55)*1e-2], price_limits=[(-10)*1e-2, (0)*1e-2], num_runs=4)
+    statistical_run(100, load_data=True)
     pass
 
 if __name__ == '__main__':
