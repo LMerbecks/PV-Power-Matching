@@ -372,12 +372,13 @@ def objective_function(real_population, integer_population, permutation_populati
     return cost
 
 def plot_result_characteristics(real_population, integer_population, ax_power:plt.axes=None, title:str="Power characteristics", add_legend:bool=True, has_battery:bool=True):
+    curve_colors = {'demand': 'blue','panel': 'grey', 'PVS': 'orange', 'battery': 'green', 'supply':'purple', 'grid_load': 'red'}
     panel_orientations = map_populations_to_orientation(
         real_population, integer_population)
 
     power_supply_characteristic = pv_system_power_production_characteristic(
         panel_orientation=panel_orientations)
-    battery_power, battery_charge = simulate_battery(power_supply_characteristic, has_battery)
+    grid_load_power, battery_power, battery_charge = simulate_home_as_grid_load(power_supply_characteristic, has_battery)
     battery_draining = battery_power > 0
     battery_charging = battery_power < 0
     battery_supplied_power = np.zeros(power_supply_characteristic.shape)
@@ -389,13 +390,15 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     if isinstance(ax_power, type(None)):
         fig_chars, ax_power = plt.subplots(nrows=1, ncols=1)
         
-    ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.5, label='Demand curve')
+    ax_power.plot(demand_times*24, power_demand_characteristic, alpha=0.2, label='Demand curve', color=curve_colors['demand'])
     ax_power.plot(demand_times*24, power_supply_characteristic,
-             label='PV production curve')
-    ax_power.plot(demand_times*24, battery_stored_power, label='Battery stored power')
-    ax_power.plot(demand_times*24, battery_supplied_power, label='Battery supplied power')
-    ax_power.plot(demand_times*24, internally_supplied_power, label='Total supplied power')
-    ax_power.plot(demand_times*24, battery_charge/10, linestyle='dashed', label='Battery charge [hWh]')
+             label='PV production curve', color=curve_colors['PVS'])
+    ax_power.plot(demand_times*24, battery_power, label='Battery power', color=curve_colors['battery'])
+    ax_power.plot(demand_times*24, internally_supplied_power, label='Total supplied power', color=curve_colors['supply'])
+    ax_power.plot(demand_times*24, grid_load_power, label='Total supplied power', color=curve_colors['grid_load'])
+    ax_charge = ax_power.twinx()
+    ax_charge.plot(demand_times*24, battery_charge, linestyle='dashed', label='Battery charge', color=curve_colors['battery'])
+    ax_charge.set_ylabel('Charge [Wh]')
     ax_power.grid(visible=True, which='both')
     ax_power.set_xticks(np.linspace(0,24,8+1))
     ax_power.set_xlabel("Time [hour UTC]")
@@ -404,6 +407,9 @@ def plot_result_characteristics(real_population, integer_population, ax_power:pl
     ax_power.set_title(title)
     if add_legend:
         ax_power.legend()
+        ax_charge.legend()
+    
+    fig_chars.tight_layout()
     
 def plot_orientation_histogram(panel_orientation: np.ndarray, axis:plt.axes=None, title:str='Distribution of panel orientations'):
     if isinstance(axis, type(None)):
@@ -566,7 +572,7 @@ def statistical_run(num_runs:int, load_data:bool=False):
     
     ga_results(best_angles[0], best_used_panels[0], [], best_PI, best_history[0])
     
-HAS_BATTERY = False
+HAS_BATTERY = True
 
 def main():
     # ga_results(np.deg2rad(np.array([60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 60, 60, 300, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60, 80, 40, 60])),np.array([18]), 0,0,0)
